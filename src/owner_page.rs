@@ -15,12 +15,13 @@ impl Launcher {
     }
 
     /// `owner` as the window shows it: the developer option that lets offline names play without
-    /// an owner (`dev_options`) hides the gate, as if the keychain hadn't answered yet.
+    /// an owner (`dev_options`) hides the gate entirely — whether no account was ever added
+    /// (`None`) or one was added but doesn't own the game (`Some(false)`).
     pub(crate) fn owner_shown(&self) -> Option<bool> {
-        match self.owner {
-            Some(false) if self.settings.dev_offline => None,
-            owner => owner,
+        if self.settings.dev_offline {
+            return None;
         }
+        self.owner
     }
 
     /// Opens the screen and starts the sign-in on it.
