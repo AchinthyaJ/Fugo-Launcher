@@ -1214,9 +1214,9 @@ export default function App() {
               setAccounts((prev) => prev.map((a) => (a.is_active ? { ...a, skin_preset: s, skin_url: null } : a)));
               if (isTauri()) invoke("set_active_skin", { skinUrl: null, preset: s }).catch((err) => alert(err));
             }}
-            onUseSkin={(url) => {
-              setAccounts((prev) => prev.map((a) => (a.is_active ? { ...a, skin_url: url } : a)));
-              if (isTauri()) invoke("set_active_skin", { skinUrl: url, preset: null }).catch((err) => alert(err));
+            onUseSkin={(url, slim) => {
+              setAccounts((prev) => prev.map((a) => (a.is_active ? { ...a, skin_url: url, skin_slim: slim } : a)));
+              if (isTauri()) invoke("set_active_skin", { skinUrl: url, preset: null, slim }).catch((err) => alert(err));
             }}
             onCape={async (c, data) => {
               const capeData = data ?? (c ? await urlToDataUrl(`/capes/${c}.png`) : null);

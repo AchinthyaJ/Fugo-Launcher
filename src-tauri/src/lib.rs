@@ -154,8 +154,8 @@ async fn download_modrinth_mod(
 }
 
 #[tauri::command]
-fn set_active_skin(skin_url: Option<String>, preset: Option<String>) -> Result<(), String> {
-    accounts::set_active_skin(skin_url, preset)
+fn set_active_skin(skin_url: Option<String>, preset: Option<String>, slim: Option<bool>) -> Result<(), String> {
+    accounts::set_active_skin(skin_url, preset, slim.unwrap_or(false))
 }
 
 #[tauri::command]

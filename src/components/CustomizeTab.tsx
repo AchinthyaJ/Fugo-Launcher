@@ -33,7 +33,7 @@ interface Props {
   skins: string[];
   capes: string[];
   onSkin: (skin: string) => void;
-  onUseSkin: (url: string) => void;
+  onUseSkin: (url: string, slim: boolean) => void;
   onCape: (cape: string | null, data: string | null) => void;
   prefs: Prefs;
   onPrefs: (prefs: Prefs) => void;
@@ -353,7 +353,7 @@ export default function CustomizeTab({ username, skin, skinUrl, cape, skins, cap
                 {section === "skin" && chosen?.skin_url && chosen.skin_url !== skinUrl && (
                   <button
                     type="button"
-                    onClick={() => onUseSkin(chosen.skin_url!)}
+                    onClick={() => onUseSkin(chosen.skin_url!, chosen.slim)}
                     className="h-9 px-5 rounded-full bg-[#E86A17] hover:bg-[#F97316] text-white text-[12px] font-bold cursor-pointer transition-colors"
                   >
                     Use on account

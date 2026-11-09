@@ -20,6 +20,7 @@ pub fn load_accounts() -> Vec<Account> {
         cape_preset: Some("2016".to_string()),
         skin_url: None,
         cape_data: None,
+        skin_slim: false,
         is_active: true,
     };
     let accs = vec![default_acc];
@@ -60,6 +61,7 @@ pub fn create_offline_account(username: &str, skin: Option<String>, cape: Option
         cape_preset: cape,
         skin_url: None,
         cape_data: None,
+        skin_slim: false,
         is_active: true,
     };
     accounts.push(new_acc.clone());
@@ -77,10 +79,11 @@ pub fn delete_account(id: &str) -> Result<(), String> {
 }
 
 /// Saves the active account's skin: a preset name, or a picked skin image (which wins when set).
-pub fn set_active_skin(skin_url: Option<String>, preset: Option<String>) -> Result<(), String> {
+pub fn set_active_skin(skin_url: Option<String>, preset: Option<String>, slim: bool) -> Result<(), String> {
     let mut accounts = load_accounts();
     let active = accounts.iter_mut().find(|a| a.is_active).ok_or("No active account")?;
     active.skin_url = skin_url;
+    active.skin_slim = slim;
     if preset.is_some() {
         active.skin_preset = preset;
     }

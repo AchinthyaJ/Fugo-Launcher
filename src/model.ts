@@ -31,5 +31,6 @@ export interface Account {
   cape_preset: string | null;
   skin_url?: string | null;
   cape_data?: string | null;
+  skin_slim?: boolean;
   is_active: boolean;
 }

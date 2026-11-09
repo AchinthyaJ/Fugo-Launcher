@@ -107,11 +107,19 @@ async fn run(
 
     let jvm_str = extra_jvm_from_profile.unwrap_or_else(|| instance.java_args.clone());
     let mut extra_jvm: Vec<String> = jvm_str.split_whitespace().map(String::from).collect();
-    // Skins: upload the account's skin, and let authlib-injector point the game at the skin service.
-    if let Some(skin) = account.skin_url.as_deref()
-        && let Err(e) = super::appearance::upload_skin(&client, &account.username, skin).await {
+    // Skins and capes go to the skin service before the game starts; authlib-injector points the game at it.
+    // Preset skins have no image in the launcher, so only a picked skin or a cape is uploaded.
+    if let Some(skin) = account.skin_url.as_deref() {
+        let model = if account.skin_slim { "slim" } else { "classic" };
+        if let Err(e) = super::appearance::upload_skin(&client, &account.username, skin, model).await {
             emit_log(app, &id, format!("Could not upload skin: {e}"), "warn");
         }
+    }
+    if let Some(cape) = account.cape_data.as_deref()
+        && let Err(e) = super::appearance::upload_cape(&client, &account.username, cape).await
+    {
+        emit_log(app, &id, format!("Could not upload cape: {e}"), "warn");
+    }
     match super::appearance::authlib_injector(&client).await {
         Ok(jar) => extra_jvm.push(format!("-javaagent:{}={}", jar.display(), super::appearance::SKIN_SERVER)),
         Err(e) => emit_log(app, &id, format!("Skins off: {e}"), "warn"),

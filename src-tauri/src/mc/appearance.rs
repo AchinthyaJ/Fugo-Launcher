@@ -18,20 +18,42 @@ pub async fn authlib_injector(client: &reqwest::Client) -> Result<PathBuf, Strin
     Ok(dest)
 }
 
-/// Uploads a PNG skin for a username to the skin service (the same call the older launcher makes).
-pub async fn upload_skin(client: &reqwest::Client, username: &str, data_url: &str) -> Result<(), String> {
-    let png = decode_png(data_url)?;
+/// A PNG from a data URL, or fetched from a web URL.
+async fn load_png(client: &reqwest::Client, source: &str) -> Result<Vec<u8>, String> {
+    if source.starts_with("data:") {
+        return decode_png(source);
+    }
+    if source.starts_with("https://") || source.starts_with("http://") {
+        let bytes = client
+            .get(source)
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| e.to_string())?
+            .bytes()
+            .await
+            .map_err(|e| e.to_string())?;
+        return Ok(bytes.to_vec());
+    }
+    Err("Skins and capes must be PNG images".to_string())
+}
+
+/// Sends a PNG to the skin service as a multipart upload.
+async fn put_png(client: &reqwest::Client, url: String, field: &str, png: Vec<u8>, extra: &[(&str, &str)]) -> Result<(), String> {
     let boundary = "fugoSkinBoundary";
     let mut body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"skin\"; filename=\"skin.png\"\r\nContent-Type: image/png\r\n\r\n"
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{field}.png\"\r\nContent-Type: image/png\r\n\r\n"
     )
     .into_bytes();
     body.extend_from_slice(&png);
-    body.extend_from_slice(
-        format!("\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nclassic\r\n--{boundary}--\r\n").as_bytes(),
-    );
+    for (name, value) in extra {
+        body.extend_from_slice(
+            format!("\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}").as_bytes(),
+        );
+    }
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     client
-        .put(format!("{SKIN_SERVER}api/skins/{}", urlencoding::encode(username)))
+        .put(url)
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(body)
         .send()
@@ -39,6 +61,20 @@ pub async fn upload_skin(client: &reqwest::Client, username: &str, data_url: &st
         .and_then(|r| r.error_for_status())
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Uploads a skin for a username. `model` is "classic" or "slim" (Alex-style arms).
+pub async fn upload_skin(client: &reqwest::Client, username: &str, source: &str, model: &str) -> Result<(), String> {
+    let png = load_png(client, source).await?;
+    let url = format!("{SKIN_SERVER}api/skins/{}", urlencoding::encode(username));
+    put_png(client, url, "skin", png, &[("model", model)]).await
+}
+
+/// Uploads a cape for a username.
+pub async fn upload_cape(client: &reqwest::Client, username: &str, source: &str) -> Result<(), String> {
+    let png = load_png(client, source).await?;
+    let url = format!("{SKIN_SERVER}api/capes/{}", urlencoding::encode(username));
+    put_png(client, url, "cape", png, &[]).await
 }
 
 const PNG_PREFIX: &str = "data:image/png;base64,";

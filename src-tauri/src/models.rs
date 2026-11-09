@@ -51,6 +51,9 @@ pub struct Account {
     /// Cape picked from a player lookup or a preset, as a PNG data URL.
     #[serde(default)]
     pub cape_data: Option<String>,
+    /// Whether the picked skin uses slim (Alex-style) arms.
+    #[serde(default)]
+    pub skin_slim: bool,
     pub is_active: bool,
 }
 
