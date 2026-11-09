@@ -1,0 +1,369 @@
+@import "tailwindcss";
+
+/* Design tokens. Spacing 4/8/16/24/32/40; radii: pill for dock and pills, 20px for
+   the play button, 16px for cards and tiles, 14px for controls. */
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --glass-tint: rgba(18, 22, 34, 0.42);
+  --glass-tint-strong: rgba(24, 30, 46, 0.6);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.025));
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-edge-hi: rgba(255, 255, 255, 0.22);
+  --glass-shadow: 0 16px 40px -14px rgba(0, 0, 0, 0.6);
+  --accent: #e86a17;
+  --accent-hi: #ff8a3d;
+}
+
+@layer utilities {
+  /* Base Liquid Glass surface: blurred tint, a top sheen, a hairline edge and a specular inner rim. */
+  .glass {
+    background: var(--surface-sheen, var(--glass-sheen)), var(--surface-fill, var(--glass-tint));
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid var(--glass-edge);
+    box-shadow: inset 0 1px 0 var(--glass-edge-hi), var(--glass-shadow);
+    transition:
+      background-color 0.35s var(--ease-out),
+      border-color 0.35s var(--ease-out),
+      transform 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out);
+  }
+
+  .glass-hover:hover {
+    background: var(--glass-sheen), var(--glass-tint-strong);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
+  }
+
+  /* Floating dock: the only persistent chrome at the top of the window. */
+  .glass-dock {
+    background: var(--surface-sheen, var(--glass-sheen)), var(--surface-fill, rgba(10, 13, 22, 0.5));
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 12px 32px -12px rgba(0, 0, 0, 0.65);
+  }
+
+  .dock-item {
+    color: rgba(255, 255, 255, 0.6);
+    transition:
+      color 0.25s ease,
+      background-color 0.25s ease,
+      margin 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      padding 0.25s ease,
+      transform 0.2s var(--ease-out);
+  }
+  .dock-item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .dock-item:active {
+    transform: scale(0.97);
+  }
+  .dock-item.is-active {
+    color: #fff;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  .dock-item:focus-visible,
+  .win-btn:focus-visible,
+  .tile:focus-visible,
+  .play-btn:focus-visible {
+    outline: 2px solid var(--accent-hi);
+    outline-offset: 2px;
+  }
+
+  .win-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.6);
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .win-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .win-btn.is-danger:hover {
+    color: #fb7185;
+  }
+
+  /* Primary action: a tinted accent glass button, the focal point of Home. */
+  .play-btn {
+    background: linear-gradient(180deg, rgba(255, 150, 80, 0.55), rgba(232, 106, 23, 0.55));
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255, 190, 140, 0.45);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 14px 36px -10px rgba(232, 106, 23, 0.65);
+    transition:
+      transform 0.2s var(--ease-out),
+      background 0.3s ease,
+      box-shadow 0.3s var(--ease-out),
+      opacity 0.2s ease;
+  }
+  .play-btn:hover:not(:disabled) {
+    background: linear-gradient(180deg, rgba(255, 160, 95, 0.65), rgba(240, 116, 31, 0.62));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 18px 44px -10px rgba(232, 106, 23, 0.8);
+  }
+  .play-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .play-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* ─── Fugo Launcher Instances Tab Components ─────────────────────────── */
+  .fugo-inst-card {
+    width: 290px;
+    height: 160px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease,
+                background-color 0.2s ease;
+  }
+  .fugo-inst-card:hover {
+    transform: scale(1.02);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  }
+  .fugo-inst-card.is-selected {
+    border: 2px solid #e86a17;
+    box-shadow: 0 0 20px rgba(232, 106, 23, 0.45), 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  .fugo-add-card {
+    width: 290px;
+    height: 160px;
+    border-radius: 12px;
+    border: 1.5px dashed rgba(232, 106, 23, 0.4);
+    background: rgba(232, 106, 23, 0.06);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fugo-add-card:hover {
+    transform: scale(1.02);
+    border-color: #e86a17;
+    background: rgba(232, 106, 23, 0.14);
+    box-shadow: 0 8px 24px rgba(232, 106, 23, 0.25);
+  }
+
+  .fugo-secondary-btn {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 10px;
+    background: rgba(20, 25, 38, 0.65);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .fugo-secondary-btn:hover {
+    background: rgba(30, 38, 58, 0.9);
+    border-color: rgba(255, 255, 255, 0.24);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+  .fugo-secondary-btn:active {
+    transform: scale(0.97);
+  }
+
+  .fugo-modal-backdrop {
+    background: rgba(4, 6, 10, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .fugo-modal-content {
+    background: rgba(14, 18, 28, 0.94);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  }
+
+  .play-btn.is-running {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Instance tiles: lighter glass than the cards, with a warm rim when selected. */
+  .tile {
+    color: rgba(255, 255, 255, 0.7);
+    background: var(--glass-sheen), rgba(14, 18, 28, 0.36);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 10px 26px -12px rgba(0, 0, 0, 0.6);
+    transition:
+      background-color 0.3s var(--ease-out),
+      border-color 0.3s var(--ease-out),
+      box-shadow 0.3s var(--ease-out),
+      transform 0.2s var(--ease-out);
+  }
+  .tile:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: var(--glass-sheen), rgba(20, 25, 38, 0.5);
+  }
+  .tile:active {
+    transform: scale(0.985);
+  }
+  .tile.is-selected {
+    color: #fff;
+    border-color: rgba(255, 170, 110, 0.6);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 0 0 1px rgba(255, 140, 70, 0.25),
+      0 14px 30px -12px rgba(232, 106, 23, 0.45);
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #34d399;
+    box-shadow: 0 0 8px #34d399;
+  }
+
+  /* The instance row scrolls sideways; its scrollbar is hidden, the drag/scroll is the affordance. */
+  .instance-scroller {
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .instance-scroller::-webkit-scrollbar {
+    display: none;
+  }
+  .instance-scroller > * {
+    scroll-snap-align: center;
+  }
+}
+
+/* Thin scrollbars for the page lists. */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Respect reduced motion: keep state changes, drop the movement and crossfades. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+  overflow: hidden;
+  background-color: #07080d;
+  color: #f3f4f6;
+}
+
+/* Home play button: an elongated hexagon outline; hover brightens it with a faint glow. */
+.hex-btn {
+  transition: transform 0.2s var(--ease-out);
+}
+.hex-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.hex-btn .hex-shape {
+  fill: var(--hex-fill, rgba(255, 255, 255, 0.04));
+  stroke: var(--hex-stroke, rgba(255, 255, 255, 0.35));
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 0.3s ease, fill 0.3s ease;
+}
+.hex-btn:hover:not(:disabled) .hex-shape {
+  stroke: rgba(255, 255, 255, 0.85);
+}
+.hex-btn svg {
+  transition: filter 0.4s ease;
+}
+.hex-btn:hover:not(:disabled) svg {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+}
+
+/* Home Play button: orange glow and bold orange label on hover. */
+.hex-btn-orange .hex-blur {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  clip-path: polygon(13.33% 0, 86.67% 0, 99.83% 50%, 86.67% 100%, 13.33% 100%, 0.17% 50%);
+}
+.hex-btn-orange:hover:not(:disabled) .hex-shape {
+  stroke: #f97316;
+  stroke-width: 3px;
+}
+.hex-btn-orange:hover:not(:disabled) svg {
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.85)) drop-shadow(0 0 22px rgba(249, 115, 22, 0.45));
+}
+/* 24fps stepping: 6 frames at 24 per second = 0.25s, held per frame. */
+.hex-btn-orange .hex-shape,
+.hex-btn-orange svg,
+.hex-btn-orange .hex-label {
+  transition-duration: 0.25s;
+  transition-timing-function: steps(6, end);
+  transition-property: stroke, stroke-width, fill, filter, color, font-weight, font-size;
+}
+.hex-btn-orange:hover:not(:disabled) .hex-label {
+  color: #f97316;
+  font-weight: 900;
+  font-size: 15px;
+}
+
+/* Instance names: the hovered one grows to 1.25x; the row reflows so the others slide over. */
+.instance-name {
+  font-size: 12px;
+  transition: font-size 0.35s var(--ease-out), color 0.3s ease;
+}
+.instance-name:hover,
+.instance-name:focus-visible {
+  font-size: 15px;
+}
+
