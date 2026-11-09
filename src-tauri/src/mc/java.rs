@@ -106,13 +106,11 @@ pub async fn ensure_java(
     if let Ok(entries) = std::fs::read_dir(&death_client_runtimes) {
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_dir() {
-                if let Some(found) = find_java_in(&p) {
-                    if major_of(&found).is_some_and(|m| m >= required) {
+            if p.is_dir()
+                && let Some(found) = find_java_in(&p)
+                    && major_of(&found).is_some_and(|m| m >= required) {
                         return Ok(found);
                     }
-                }
-            }
         }
     }
 

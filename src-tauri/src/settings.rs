@@ -39,11 +39,10 @@ pub fn get_default_horizon_paths() -> (PathBuf, PathBuf) {
 
 pub fn load_settings() -> LauncherSettings {
     let settings_file = get_app_dir().join("settings.json");
-    if let Ok(data) = fs::read_to_string(&settings_file) {
-        if let Ok(settings) = serde_json::from_str::<LauncherSettings>(&data) {
+    if let Ok(data) = fs::read_to_string(&settings_file)
+        && let Ok(settings) = serde_json::from_str::<LauncherSettings>(&data) {
             return settings;
         }
-    }
 
     let (res_path, bin_path) = get_default_horizon_paths();
     let default = LauncherSettings {

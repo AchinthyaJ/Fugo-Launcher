@@ -120,17 +120,15 @@ pub fn detect_is_rust(dir: &std::path::Path, v: Option<&serde_json::Value>, name
 
     // 4. Check for .hmod files in mods/ or horizon-mods/
     for folder in [dir.join("mods"), dir.join("horizon-mods")] {
-        if folder.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&folder) {
+        if folder.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&folder) {
                 for entry in entries.flatten() {
-                    if let Some(ext) = entry.path().extension() {
-                        if ext.to_string_lossy().eq_ignore_ascii_case("hmod") {
+                    if let Some(ext) = entry.path().extension()
+                        && ext.to_string_lossy().eq_ignore_ascii_case("hmod") {
                             return true;
                         }
-                    }
                 }
             }
-        }
     }
 
     // 5. Check if any file/folder in root starts with "horizon"
@@ -221,13 +219,12 @@ pub fn load_instances() -> Vec<Instance> {
         get_death_client_dir().join("instances.json"),
         get_app_dir().join("instances.json"),
     ] {
-        if let Ok(data) = fs::read_to_string(&file) {
-            if let Ok(list) = serde_json::from_str::<Vec<Instance>>(&data) {
+        if let Ok(data) = fs::read_to_string(&file)
+            && let Ok(list) = serde_json::from_str::<Vec<Instance>>(&data) {
                 for inst in list {
                     cached_map.entry(inst.id.clone()).or_insert(inst);
                 }
             }
-        }
     }
 
     let mut discovered: Vec<Instance> = Vec::new();
@@ -265,9 +262,9 @@ pub fn load_instances() -> Vec<Instance> {
                 }
             };
 
-            if profile_path.is_file() {
-                if let Ok(data) = fs::read_to_string(&profile_path) {
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
+            if profile_path.is_file()
+                && let Ok(data) = fs::read_to_string(&profile_path)
+                    && let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
                         let raw_name = v.get("name").and_then(|n| n.as_str()).unwrap_or(&folder_name).trim();
                         let name = if raw_name.is_empty() { folder_name.clone() } else { raw_name.to_string() };
                         let mut loader = v.get("loader").and_then(|l| l.as_str()).unwrap_or("vanilla").to_string();
@@ -322,8 +319,6 @@ pub fn load_instances() -> Vec<Instance> {
                         discovered.push(inst);
                         continue;
                     }
-                }
-            }
 
             // Folder exists without a valid death-profile.json
             let inst = if let Some(mut c) = cached {
@@ -618,14 +613,13 @@ pub fn pick_directory() -> Result<Option<String>, String> {
         let out = std::process::Command::new("zenity")
             .args(["--file-selection", "--directory", "--title=Select Instance Directory to Import"])
             .output();
-        if let Ok(o) = out {
-            if o.status.success() {
+        if let Ok(o) = out
+            && o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
                 if !s.is_empty() {
                     return Ok(Some(s));
                 }
             }
-        }
     }
     Ok(None)
 }
@@ -636,14 +630,13 @@ pub fn pick_zip_file() -> Result<Option<String>, String> {
         let out = std::process::Command::new("zenity")
             .args(["--file-selection", "--file-filter=*.zip", "--title=Select Instance Backup (.zip) to Import"])
             .output();
-        if let Ok(o) = out {
-            if o.status.success() {
+        if let Ok(o) = out
+            && o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
                 if !s.is_empty() {
                     return Ok(Some(s));
                 }
             }
-        }
     }
     Ok(None)
 }
@@ -671,34 +664,29 @@ pub fn import_instance_directory(source_path_str: &str, edition_override: Option
     let mut parsed_json_value: Option<serde_json::Value> = None;
 
     if death_profile_path.is_file() {
-        if let Ok(data) = fs::read_to_string(&death_profile_path) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
-                if let Some(n) = v.get("name").and_then(|n| n.as_str()) {
-                    if !n.trim().is_empty() {
+        if let Ok(data) = fs::read_to_string(&death_profile_path)
+            && let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
+                if let Some(n) = v.get("name").and_then(|n| n.as_str())
+                    && !n.trim().is_empty() {
                         instance_name = n.to_string();
                     }
-                }
-                if let Some(gv) = v.get("gameVersion").and_then(|g| g.as_str()) {
-                    if !gv.trim().is_empty() {
+                if let Some(gv) = v.get("gameVersion").and_then(|g| g.as_str())
+                    && !gv.trim().is_empty() {
                         game_version = gv.to_string();
                     }
-                }
-                if let Some(l) = v.get("loader").and_then(|l| l.as_str()) {
-                    if !l.trim().is_empty() {
+                if let Some(l) = v.get("loader").and_then(|l| l.as_str())
+                    && !l.trim().is_empty() {
                         loader = l.to_string();
                     }
-                }
                 if let Some(ram) = v.get("maxRamMb").and_then(|r| r.as_u64()) {
                     memory_max_mb = ram as u32;
                 }
-                if let Some(jvm) = v.get("jvmArguments").and_then(|j| j.as_str()) {
-                    if !jvm.trim().is_empty() {
+                if let Some(jvm) = v.get("jvmArguments").and_then(|j| j.as_str())
+                    && !jvm.trim().is_empty() {
                         java_args = jvm.to_string();
                     }
-                }
                 parsed_json_value = Some(v);
             }
-        }
     } else {
         // No launcher profile: read the loader from the pack's own metadata (Prism and MultiMC
         // list each component by its uid). A mods folder alone says nothing about the loader.
@@ -816,11 +804,10 @@ pub fn import_instance_zip(zip_path_str: &str, edition_override: Option<&str>) -
         if entry.is_dir() {
             fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
         } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
+            if let Some(p) = outpath.parent()
+                && !p.exists() {
                     fs::create_dir_all(p).map_err(|e| e.to_string())?;
                 }
-            }
             let mut outfile = fs::File::create(&outpath).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
         }
@@ -875,40 +862,32 @@ pub fn list_instance_content(instance_id: &str, subfolder: &str) -> Result<Vec<I
             if subfolder == "resourcepacks" {
                 if path.is_dir() {
                     let mcmeta_path = path.join("pack.mcmeta");
-                    if mcmeta_path.exists() {
-                        if let Ok(content) = fs::read_to_string(mcmeta_path) {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                                if let Some(desc) = json.get("pack").and_then(|p| p.get("description")) {
+                    if mcmeta_path.exists()
+                        && let Ok(content) = fs::read_to_string(mcmeta_path)
+                            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                                && let Some(desc) = json.get("pack").and_then(|p| p.get("description")) {
                                     if let Some(text) = desc.as_str() {
                                         description = Some(text.to_string());
                                     } else if let Some(text) = desc.get("text").and_then(|t| t.as_str()) {
                                         description = Some(text.to_string());
                                     }
                                 }
-                            }
-                        }
-                    }
-                } else if path.is_file() {
-                    if let Ok(file) = fs::File::open(&path) {
-                        if let Ok(mut archive) = zip::ZipArchive::new(file) {
-                            if let Ok(mut mcmeta_entry) = archive.by_name("pack.mcmeta") {
+                } else if path.is_file()
+                    && let Ok(file) = fs::File::open(&path)
+                        && let Ok(mut archive) = zip::ZipArchive::new(file)
+                            && let Ok(mut mcmeta_entry) = archive.by_name("pack.mcmeta") {
                                 use std::io::Read;
                                 let mut content = String::new();
-                                if mcmeta_entry.read_to_string(&mut content).is_ok() {
-                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                                        if let Some(desc) = json.get("pack").and_then(|p| p.get("description")) {
+                                if mcmeta_entry.read_to_string(&mut content).is_ok()
+                                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                                        && let Some(desc) = json.get("pack").and_then(|p| p.get("description")) {
                                             if let Some(text) = desc.as_str() {
                                                 description = Some(text.to_string());
                                             } else if let Some(text) = desc.get("text").and_then(|t| t.as_str()) {
                                                 description = Some(text.to_string());
                                             }
                                         }
-                                    }
-                                }
                             }
-                        }
-                    }
-                }
             }
 
             result.push(InstanceContentItem {
@@ -920,7 +899,7 @@ pub fn list_instance_content(instance_id: &str, subfolder: &str) -> Result<Vec<I
             });
         }
     }
-    result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    result.sort_by_key(|a| a.name.to_lowercase());
     Ok(result)
 }
 

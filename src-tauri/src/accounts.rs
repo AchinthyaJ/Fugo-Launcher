@@ -4,13 +4,11 @@ use std::fs;
 
 pub fn load_accounts() -> Vec<Account> {
     let file = get_app_dir().join("accounts.json");
-    if let Ok(data) = fs::read_to_string(&file) {
-        if let Ok(accs) = serde_json::from_str::<Vec<Account>>(&data) {
-            if !accs.is_empty() {
+    if let Ok(data) = fs::read_to_string(&file)
+        && let Ok(accs) = serde_json::from_str::<Vec<Account>>(&data)
+            && !accs.is_empty() {
                 return accs;
             }
-        }
-    }
 
     // Default initial account
     let default_acc = Account {

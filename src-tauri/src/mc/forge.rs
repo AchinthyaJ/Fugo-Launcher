@@ -147,12 +147,11 @@ pub async fn ensure_installed(
     // Libraries the installer ships itself (an empty URL) come out of its `maven/` folder.
     for lib in version_doc.get("libraries").and_then(Value::as_array).into_iter().flatten() {
         let Some(artifact) = lib.pointer("/downloads/artifact") else { continue };
-        if artifact.get("url").and_then(Value::as_str) == Some("") {
-            if let Some(path) = artifact.get("path").and_then(Value::as_str) {
+        if artifact.get("url").and_then(Value::as_str) == Some("")
+            && let Some(path) = artifact.get("path").and_then(Value::as_str) {
                 // A processor may be what makes it (the patched client), so a miss here is not an error yet.
                 let _ = ensure_library(client, &installer, path, None, loader).await;
             }
-        }
     }
 
     // The processors make the patched client jar that the version lists as a library, so they
@@ -288,7 +287,7 @@ async fn run_processors(
         .filter(|p| {
             p.get("sides")
                 .and_then(Value::as_array)
-                .map_or(true, |s| s.iter().any(|x| x.as_str() == Some("client")))
+                .is_none_or(|s| s.iter().any(|x| x.as_str() == Some("client")))
         })
         .collect();
     for p in &processors {
@@ -353,7 +352,7 @@ async fn run_processors(
         let outputs_ready = p
             .get("outputs")
             .and_then(Value::as_object)
-            .map_or(false, |o| {
+            .is_some_and(|o| {
                 o.keys().all(|k| {
                     let path = resolve_arg(k, &vars, &libraries).unwrap_or_default();
                     Path::new(&path).is_file()

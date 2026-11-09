@@ -124,7 +124,7 @@ pub(crate) fn spawn_log_streamers(app: AppHandle, instance_id: String, mut child
     if let Some(out) = stdout {
         thread::spawn(move || {
             let reader = BufReader::new(out);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 emit_log(&app_out, &id_out, line, "info");
             }
         });
@@ -135,7 +135,7 @@ pub(crate) fn spawn_log_streamers(app: AppHandle, instance_id: String, mut child
     if let Some(err) = stderr {
         thread::spawn(move || {
             let reader = BufReader::new(err);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 emit_log(&app_err, &id_err, line, "error");
             }
         });
@@ -189,7 +189,7 @@ pub fn build_horizon_engine(app: AppHandle) -> Result<(), String> {
         if let Ok(mut child) = cmd.spawn() {
             if let Some(stderr) = child.stderr.take() {
                 let reader = BufReader::new(stderr);
-                for line in reader.lines().flatten() {
+                for line in reader.lines().map_while(Result::ok) {
                     let _ = app.emit("build-status", &line);
                 }
             }

@@ -94,11 +94,10 @@ fn sha1_hex(bytes: &[u8]) -> String {
 }
 
 async fn has_good_copy(path: &Path, _sha1: Option<&str>) -> bool {
-    if let Ok(meta) = tokio::fs::metadata(path).await {
-        if meta.is_file() && meta.len() > 0 {
+    if let Ok(meta) = tokio::fs::metadata(path).await
+        && meta.is_file() && meta.len() > 0 {
             return true;
         }
-    }
     false
 }
 
@@ -124,11 +123,10 @@ pub async fn download(
         .bytes()
         .await
         .map_err(err)?;
-    if let Some(expected) = sha1 {
-        if !sha1_hex(&bytes).eq_ignore_ascii_case(expected) {
+    if let Some(expected) = sha1
+        && !sha1_hex(&bytes).eq_ignore_ascii_case(expected) {
             return Err(format!("Checksum mismatch for {url}"));
         }
-    }
     let tmp = PathBuf::from(format!("{}.part", dest.display()));
     tokio::fs::write(&tmp, &bytes).await.map_err(err)?;
     tokio::fs::rename(&tmp, dest).await.map_err(err)
@@ -166,7 +164,7 @@ async fn download_all(
     while let Some(result) = downloads.next().await {
         result?;
         done += 1;
-        if done % 16 == 0 || done == total {
+        if done.is_multiple_of(16) || done == total {
             progress(stage, done, total);
         }
     }
@@ -214,7 +212,7 @@ fn libraries_present(json: &Value, libraries: &Path) -> bool {
                 .and_then(Value::as_str)
                 .map(String::from)
                 .or_else(|| maven_path(name, None));
-            path.map_or(true, |p| libraries.join(p).is_file())
+            path.is_none_or(|p| libraries.join(p).is_file())
         })
 }
 
@@ -235,8 +233,8 @@ pub async fn install(
     // Works for ALL versions from 1.0 to 26.3:
     if client_jar.is_file() && version_json_file.is_file() {
         let _ = tokio::fs::create_dir_all(&natives_dir).await;
-        if let Ok(bytes) = tokio::fs::read(&version_json_file).await {
-            if let Some(json) = serde_json::from_slice::<Value>(&bytes).ok().filter(|j| libraries_present(j, &libraries)) {
+        if let Ok(bytes) = tokio::fs::read(&version_json_file).await
+            && let Some(json) = serde_json::from_slice::<Value>(&bytes).ok().filter(|j| libraries_present(j, &libraries)) {
                 let mut classpath = Vec::new();
                 let library_list = json.get("libraries").and_then(Value::as_array).cloned().unwrap_or_default();
                 for lib in &library_list {
@@ -249,14 +247,13 @@ pub async fn install(
                         let base = lib.get("url").and_then(Value::as_str).unwrap_or(LIBRARY_BASE);
                         Some(serde_json::json!({ "path": path, "url": format!("{base}{path}") }))
                     });
-                    if let Some(artifact) = artifact {
-                        if let Some(path) = artifact.get("path").and_then(Value::as_str) {
+                    if let Some(artifact) = artifact
+                        && let Some(path) = artifact.get("path").and_then(Value::as_str) {
                             let dest = libraries.join(path);
                             if dest.is_file() {
                                 classpath.push(dest);
                             }
                         }
-                    }
                 }
 
                 let asset_index = json
@@ -309,7 +306,6 @@ pub async fn install(
                     java_major,
                 });
             }
-        }
     }
 
     let json = version_json(client, id).await?;
@@ -346,8 +342,8 @@ pub async fn install(
             let base = lib.get("url").and_then(Value::as_str).unwrap_or(LIBRARY_BASE);
             Some(serde_json::json!({ "path": path, "url": format!("{base}{path}") }))
         });
-        if let Some(artifact) = artifact {
-            if let (Some(path), Some(url)) = (
+        if let Some(artifact) = artifact
+            && let (Some(path), Some(url)) = (
                 artifact.get("path").and_then(Value::as_str),
                 artifact.get("url").and_then(Value::as_str),
             ) {
@@ -359,7 +355,6 @@ pub async fn install(
                 });
                 classpath.push(dest);
             }
-        }
 
         // Older libraries ship natives as a classifier jar, which is extracted at launch.
         let classifier = lib
@@ -376,8 +371,8 @@ pub async fn install(
                     let base = lib.get("url").and_then(Value::as_str).unwrap_or(LIBRARY_BASE);
                     Some(serde_json::json!({ "path": path, "url": format!("{base}{path}") }))
                 });
-            if let Some(native) = native {
-                if let (Some(path), Some(url)) = (
+            if let Some(native) = native
+                && let (Some(path), Some(url)) = (
                     native.get("path").and_then(Value::as_str),
                     native.get("url").and_then(Value::as_str),
                 ) {
@@ -394,7 +389,6 @@ pub async fn install(
                         .unwrap_or_default();
                     natives.push((dest, exclude));
                 }
-            }
         }
     }
     download_all(client, jobs, "Libraries", progress).await?;

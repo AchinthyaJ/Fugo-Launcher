@@ -120,11 +120,10 @@ async fn manifest(client: &reqwest::Client) -> Result<Manifest, String> {
 /// The version file (`<id>.json`) for one version, saved once fetched.
 pub async fn version_json(client: &reqwest::Client, id: &str) -> Result<Value, String> {
     let path = versions_dir().join(id).join(format!("{id}.json"));
-    if let Ok(saved) = tokio::fs::read(&path).await {
-        if let Ok(json) = serde_json::from_slice(&saved) {
+    if let Ok(saved) = tokio::fs::read(&path).await
+        && let Ok(json) = serde_json::from_slice(&saved) {
             return Ok(json);
         }
-    }
     let list = manifest(client).await?;
     let entry = list
         .versions

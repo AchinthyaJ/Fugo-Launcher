@@ -56,25 +56,21 @@ async fn run(
     let mut version = instance.game_version.clone();
     let mut custom_java_from_profile = None;
     let mut extra_jvm_from_profile = None;
-    if let Ok(data) = tokio::fs::read_to_string(&profile_path).await {
-        if let Ok(profile) = serde_json::from_str::<serde_json::Value>(&data) {
-            if let Some(vid) = profile.get("versionId").and_then(|v| v.as_str()) {
-                if !vid.is_empty() && super::versions_dir().join(vid).exists() {
+    if let Ok(data) = tokio::fs::read_to_string(&profile_path).await
+        && let Ok(profile) = serde_json::from_str::<serde_json::Value>(&data) {
+            if let Some(vid) = profile.get("versionId").and_then(|v| v.as_str())
+                && !vid.is_empty() && super::versions_dir().join(vid).exists() {
                     version = vid.to_string();
                 }
-            }
-            if let Some(jp) = profile.get("javaPath").and_then(|v| v.as_str()) {
-                if !jp.is_empty() && std::path::Path::new(jp).exists() {
+            if let Some(jp) = profile.get("javaPath").and_then(|v| v.as_str())
+                && !jp.is_empty() && std::path::Path::new(jp).exists() {
                     custom_java_from_profile = Some(jp.to_string());
                 }
-            }
-            if let Some(jvm) = profile.get("jvmArguments").and_then(|v| v.as_str()) {
-                if !jvm.trim().is_empty() {
+            if let Some(jvm) = profile.get("jvmArguments").and_then(|v| v.as_str())
+                && !jvm.trim().is_empty() {
                     extra_jvm_from_profile = Some(jvm.to_string());
                 }
-            }
         }
-    }
 
     emit_log(app, &id, format!("Preparing Minecraft {version}..."), "info");
     let progress_app = app.clone();
@@ -106,17 +102,16 @@ async fn run(
     };
     let custom_java = custom_java_from_profile
         .as_deref()
-        .or_else(|| settings.custom_java_path.as_deref());
+        .or(settings.custom_java_path.as_deref());
     let java_bin = java::ensure_java(&client, installed.java_major, custom_java, &java_log).await?;
 
     let jvm_str = extra_jvm_from_profile.unwrap_or_else(|| instance.java_args.clone());
     let mut extra_jvm: Vec<String> = jvm_str.split_whitespace().map(String::from).collect();
     // Skins: upload the account's skin, and let authlib-injector point the game at the skin service.
-    if let Some(skin) = account.skin_url.as_deref() {
-        if let Err(e) = super::appearance::upload_skin(&client, &account.username, skin).await {
+    if let Some(skin) = account.skin_url.as_deref()
+        && let Err(e) = super::appearance::upload_skin(&client, &account.username, skin).await {
             emit_log(app, &id, format!("Could not upload skin: {e}"), "warn");
         }
-    }
     match super::appearance::authlib_injector(&client).await {
         Ok(jar) => extra_jvm.push(format!("-javaagent:{}={}", jar.display(), super::appearance::SKIN_SERVER)),
         Err(e) => emit_log(app, &id, format!("Skins off: {e}"), "warn"),

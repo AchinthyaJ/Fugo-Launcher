@@ -150,11 +150,10 @@ async fn get_version(client: &reqwest::Client, version_id: &str) -> Result<Versi
 async fn pick_version(client: &reqwest::Client, project: &Project, target: &Target) -> Result<Version, String> {
     let mut url = format!("{MODRINTH_API}/project/{}/version", project.id);
     let mut params = Vec::new();
-    if project.project_type == "mod" {
-        if let Some(loader) = &target.loader {
+    if project.project_type == "mod"
+        && let Some(loader) = &target.loader {
             params.push(format!("loaders={}", urlencoding::encode(&serde_json::json!([loader]).to_string())));
         }
-    }
     if let Some(game_version) = &target.game_version {
         params.push(format!("game_versions={}", urlencoding::encode(&serde_json::json!([game_version]).to_string())));
     }
@@ -208,16 +207,14 @@ pub async fn search_modrinth(
     let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{project_type}")]];
 
     // Loader filter applies to mods only; packs and shaders match their own loaders.
-    if let Some(l) = loader {
-        if project_type == "mod" && !matches!(l, "" | "all" | "vanilla" | "horizon-rust") {
+    if let Some(l) = loader
+        && project_type == "mod" && !matches!(l, "" | "all" | "vanilla" | "horizon-rust") {
             facets.push(vec![format!("categories:{}", l.to_lowercase())]);
         }
-    }
-    if let Some(v) = game_version {
-        if !v.is_empty() && v != "any" {
+    if let Some(v) = game_version
+        && !v.is_empty() && v != "any" {
             facets.push(vec![format!("versions:{}", v)]);
         }
-    }
 
     let facets_str = serde_json::to_string(&facets).unwrap_or_default();
     let limit_num = limit.unwrap_or(20).to_string();
@@ -317,7 +314,7 @@ pub async fn download_modrinth_mod(
 
         for dep in version.dependencies.iter().filter(|d| d.dependency_type == "required") {
             if let Some(pid) = &dep.project_id {
-                let on_disk = projects.get(pid).map_or(false, |f| dir.join(f).is_file());
+                let on_disk = projects.get(pid).is_some_and(|f| dir.join(f).is_file());
                 if visited.contains(pid) || on_disk {
                     continue;
                 }
