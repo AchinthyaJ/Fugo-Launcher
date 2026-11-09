@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 /// The skin service (Yggdrasil-compatible): skins are uploaded here and the game reads them via authlib-injector.
 pub const SKIN_SERVER: &str = "https://aether.aetherservers.workers.dev/";
 const AUTHLIB_URL: &str =
-    "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.5/authlib-injector-1.2.5.jar";
+    "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar";
 
 /// Downloads authlib-injector once and returns its path.
 pub async fn authlib_injector(client: &reqwest::Client) -> Result<PathBuf, String> {
-    let dest = crate::settings::get_app_dir().join("authlib-injector-1.2.5.jar");
+    let dest = crate::settings::get_app_dir().join("authlib-injector-1.2.8.jar");
     super::install::download(client, AUTHLIB_URL, &dest, None).await?;
     Ok(dest)
 }
@@ -61,6 +61,36 @@ async fn put_png(client: &reqwest::Client, url: String, field: &str, png: Vec<u8
         .and_then(|r| r.error_for_status())
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Writes the account's skin and cape where the Horizon Rust game reads them, and returns the
+/// environment variables that point at them. The game draws them on the local player.
+pub async fn horizon_env(client: &reqwest::Client, account: &crate::models::Account) -> Vec<(&'static str, String)> {
+    let dir = crate::settings::get_app_dir().join("skins");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return Vec::new();
+    }
+    let name = account.username.to_ascii_lowercase();
+    let mut env = Vec::new();
+    if let Some(skin) = account.skin_url.as_deref()
+        && let Ok(png) = load_png(client, skin).await
+    {
+        let path = dir.join(format!("{name}.png"));
+        if std::fs::write(&path, png).is_ok() {
+            env.push(("HORIZON_OFFLINE_SKIN", path.to_string_lossy().into_owned()));
+            let model = if account.skin_slim { "slim" } else { "classic" };
+            env.push(("HORIZON_OFFLINE_SKIN_MODEL", model.to_string()));
+        }
+    }
+    if let Some(cape) = account.cape_data.as_deref()
+        && let Ok(png) = load_png(client, cape).await
+    {
+        let path = dir.join(format!("{name}.cape.png"));
+        if std::fs::write(&path, png).is_ok() {
+            env.push(("HORIZON_OFFLINE_CAPE", path.to_string_lossy().into_owned()));
+        }
+    }
+    env
 }
 
 /// Uploads a skin for a username. `model` is "classic" or "slim" (Alex-style arms).

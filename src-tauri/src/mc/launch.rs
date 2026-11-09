@@ -216,6 +216,9 @@ async fn run_rust(
         .arg(&account.username)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    for (key, value) in super::appearance::horizon_env(&client, account).await {
+        cmd.env(key, value);
+    }
     if settings.discrete_gpu {
         cmd.env("__NV_PRIME_RENDER_OFFLOAD", "1")
             .env("__VK_LAYER_NV_optimus", "NVIDIA_only")
