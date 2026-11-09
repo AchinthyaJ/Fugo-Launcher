@@ -110,7 +110,17 @@ async fn run(
     let java_bin = java::ensure_java(&client, installed.java_major, custom_java, &java_log).await?;
 
     let jvm_str = extra_jvm_from_profile.unwrap_or_else(|| instance.java_args.clone());
-    let extra_jvm = jvm_str.split_whitespace().map(String::from).collect();
+    let mut extra_jvm: Vec<String> = jvm_str.split_whitespace().map(String::from).collect();
+    // Skins: upload the account's skin, and let authlib-injector point the game at the skin service.
+    if let Some(skin) = account.skin_url.as_deref() {
+        if let Err(e) = super::appearance::upload_skin(&client, &account.username, skin).await {
+            emit_log(app, &id, format!("Could not upload skin: {e}"), "warn");
+        }
+    }
+    match super::appearance::authlib_injector(&client).await {
+        Ok(jar) => extra_jvm.push(format!("-javaagent:{}={}", jar.display(), super::appearance::SKIN_SERVER)),
+        Err(e) => emit_log(app, &id, format!("Skins off: {e}"), "warn"),
+    }
     let mut cmd = build(LaunchSpec {
         java: java_bin,
         installed: &installed,
