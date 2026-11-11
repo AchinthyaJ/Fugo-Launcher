@@ -127,7 +127,7 @@ jobs:
       - name: Build the package with makepkg
         shell: bash
         run: |
-          pacman -Syu --noconfirm base-devel github-cli
+          pacman -Syu --noconfirm base-devel github-cli webkit2gtk-4.1 gtk3 libayatana-appindicator librsvg xdotool openssl
           useradd -m builder
           chmod -R a+rwX arch
           su builder -c "cd '$GITHUB_WORKSPACE/arch' && makepkg --noconfirm --skippgpcheck -f"
