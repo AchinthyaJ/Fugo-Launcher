@@ -1,0 +1,19 @@
+# Arch Linux package for Fugo. The release workflow fills in pkgver and builds the package from the
+# binary that the Linux job already compiled, so this file only installs files.
+pkgname=fugo-launcher
+pkgver=0
+pkgrel=1
+pkgdesc="Fugo launcher for Minecraft Java Edition and Horizon, the Rust Edition"
+arch=('x86_64')
+url="https://github.com/AchinthyaJ/Fugo-Launcher"
+license=('custom')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'librsvg' 'xdotool' 'openssl')
+options=('!strip')
+source=("fugo-launcher" "fugo-launcher.png" "fugo-launcher.desktop")
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "$srcdir/fugo-launcher" "$pkgdir/usr/bin/fugo-launcher"
+  install -Dm644 "$srcdir/fugo-launcher.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/fugo-launcher.png"
+  install -Dm644 "$srcdir/fugo-launcher.desktop" "$pkgdir/usr/share/applications/fugo-launcher.desktop"
+}

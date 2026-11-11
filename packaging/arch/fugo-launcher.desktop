@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Fugo Launcher
+Comment=Minecraft Java Edition and Horizon, the Rust Edition
+Exec=fugo-launcher
+Icon=fugo-launcher
+Terminal=false
+Type=Application
+Categories=Game;

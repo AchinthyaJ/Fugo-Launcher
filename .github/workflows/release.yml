@@ -1,8 +1,10 @@
 name: Release
 
-# Every new tag that starts with "v" (for example v4.0.1) builds Fugo for Linux and Windows and
-# publishes a GitHub release with the installers attached. The tag must match the version in
-# src-tauri/tauri.conf.json.
+# Every new tag that starts with "v" (for example v4.0.5) builds Fugo and publishes a GitHub
+# release with these files attached:
+#   Linux x64:   .deb, .AppImage, pkg.tar.zst (Arch)
+#   Windows x64: the NSIS installer (.exe) and the MSI
+# The tag must match the version in src-tauri/tauri.conf.json.
 
 on:
   push:
@@ -27,8 +29,10 @@ jobs:
         include:
           - name: Linux x64
             os: ubuntu-22.04
+            args: "--bundles deb,appimage"
           - name: Windows x64
             os: windows-latest
+            args: ""
 
     steps:
       - name: Check out
@@ -88,3 +92,49 @@ jobs:
           releaseBody: "Fugo ${{ github.ref_name }}. Download the installer for your system below."
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Stage the Arch package inputs
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p arch-inputs
+          cp src-tauri/target/release/fugo-launcher arch-inputs/
+          cp src-tauri/icons/128x128.png arch-inputs/fugo-launcher.png
+          cp packaging/arch/PKGBUILD packaging/arch/fugo-launcher.desktop arch-inputs/
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          sed -i "s/^pkgver=0$/pkgver=${version}/" arch-inputs/PKGBUILD
+
+      - name: Keep the Arch package inputs for the next job
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-inputs
+          path: arch-inputs
+
+  arch-package:
+    name: Arch package (pkg.tar.zst)
+    needs: release
+    runs-on: ubuntu-22.04
+    container: archlinux:latest
+    steps:
+      - name: Get the package inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-inputs
+          path: arch
+
+      - name: Build the package with makepkg
+        shell: bash
+        run: |
+          pacman -Syu --noconfirm base-devel github-cli
+          useradd -m builder
+          chmod -R a+rwX arch
+          su builder -c "cd '$GITHUB_WORKSPACE/arch' && makepkg --noconfirm --skippgpcheck -f"
+          ls -l arch/*.pkg.tar.zst
+
+      - name: Attach the package to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" arch/*.pkg.tar.zst --clobber
