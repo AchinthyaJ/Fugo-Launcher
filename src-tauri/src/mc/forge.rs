@@ -465,9 +465,10 @@ mod tests {
         let libs = Path::new("/games/mc/libraries");
         assert_eq!(resolve_arg("--output", &vars, libs).unwrap(), "--output");
         assert_eq!(resolve_arg("{ROOT}/out", &vars, libs).unwrap(), "/games/mc/out");
+        // A library path is built from the libraries folder, so compare paths (Windows uses `\`).
         assert_eq!(
-            resolve_arg("[org.ow2.asm:asm:9.6]", &vars, libs).unwrap(),
-            "/games/mc/libraries/org/ow2/asm/asm/9.6/asm-9.6.jar"
+            Path::new(&resolve_arg("[org.ow2.asm:asm:9.6]", &vars, libs).unwrap()),
+            libs.join("org/ow2/asm/asm/9.6/asm-9.6.jar")
         );
     }
 
