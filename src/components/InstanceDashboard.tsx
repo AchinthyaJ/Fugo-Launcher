@@ -19,6 +19,12 @@ import {
   Sparkles
 } from "lucide-react";
 import type { Instance } from "../model";
+import LoaderPicker, { LoaderName } from "./LoaderPicker";
+
+const KNOWN_LOADERS: LoaderName[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
+/** The loader a Java instance starts from in the settings; Horizon Rust is not a Java loader. */
+const javaLoaderOf = (loader: string): LoaderName =>
+  (KNOWN_LOADERS as string[]).includes(loader) ? (loader as LoaderName) : "vanilla";
 
 interface InstalledMod {
   filename: string;
@@ -90,6 +96,8 @@ export default function InstanceDashboard({
   // Editable settings state
   const [editName, setEditName] = useState(instance.name);
   const [editEdition, setEditEdition] = useState<"rust" | "java">(instance.edition);
+  const [editLoader, setEditLoader] = useState<LoaderName>(javaLoaderOf(instance.loader));
+  const [editLoaderVersion, setEditLoaderVersion] = useState<string | null>(instance.loader_version ?? null);
   const [editRam, setEditRam] = useState(instance.memory_max_mb);
   const [editJavaArgs, setEditJavaArgs] = useState(instance.java_args || "");
   const [editBanner, setEditBanner] = useState(instance.banner || "instance_default_cover_1.png");
@@ -128,6 +136,8 @@ export default function InstanceDashboard({
     loadData();
     setEditName(instance.name);
     setEditEdition(instance.edition);
+    setEditLoader(javaLoaderOf(instance.loader));
+    setEditLoaderVersion(instance.loader_version ?? null);
     setEditRam(instance.memory_max_mb);
     setEditJavaArgs(instance.java_args || "");
     setEditBanner(instance.banner || "instance_default_cover_1.png");
@@ -196,7 +206,8 @@ export default function InstanceDashboard({
       ...instance,
       name: editName.trim() || instance.name,
       edition: editEdition,
-      loader: editEdition === "rust" ? "horizon-rust" : (instance.loader === "horizon-rust" ? "vanilla" : instance.loader),
+      loader: editEdition === "rust" ? "horizon-rust" : editLoader,
+      loader_version: editEdition === "java" && editLoader !== "vanilla" ? editLoaderVersion : null,
       game_version: editEdition === "rust" ? "26.3" : instance.game_version,
       memory_max_mb: editRam,
       java_args: editJavaArgs,
@@ -921,6 +932,16 @@ export default function InstanceDashboard({
               </button>
             </div>
           </div>
+
+          {editEdition === "java" && (
+            <LoaderPicker
+              loader={editLoader}
+              loaderVersion={editLoaderVersion}
+              gameVersion={instance.game_version}
+              onLoaderChange={setEditLoader}
+              onLoaderVersionChange={setEditLoaderVersion}
+            />
+          )}
 
           <div>
             <div className="flex items-center justify-between text-xs mb-1">

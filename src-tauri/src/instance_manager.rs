@@ -159,6 +159,89 @@ fn detect_loader_from_pack(source: &std::path::Path) -> Option<&'static str> {
     })
 }
 
+/// Works out the mod loader of an instance folder from what is on disk: first the version folders
+/// the official launcher or Prism wrote (`versions/fabric-loader-0.16.9-1.21.1`), then the loader
+/// each jar in `mods/` was built for. Returns the loader and its build when the folder names one.
+pub fn detect_loader_on_disk(dir: &std::path::Path) -> Option<(String, Option<String>)> {
+    if let Ok(entries) = fs::read_dir(dir.join("versions")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if let Some((loader, build)) = loader_from_version_name(&name) {
+                return Some((loader.to_string(), build));
+            }
+        }
+    }
+
+    let mut votes: Vec<(&'static str, usize)> = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir.join("mods")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jar")) {
+                continue;
+            }
+            let Some(loader) = jar_loader(&path) else { continue };
+            match votes.iter_mut().find(|(l, _)| *l == loader) {
+                Some(vote) => vote.1 += 1,
+                None => votes.push((loader, 1)),
+            }
+        }
+    }
+    votes
+        .into_iter()
+        .max_by_key(|(_, n)| *n)
+        .map(|(loader, _)| (loader.to_string(), None))
+}
+
+/// A Vanilla Java instance may still have a loader on disk, for example one copied in from the
+/// official launcher. Use the loader found there; anything else keeps what the profile says.
+fn settle_loader(dir: &std::path::Path, loader: String, loader_version: Option<String>) -> (String, Option<String>) {
+    if loader != "vanilla" {
+        return (loader, loader_version);
+    }
+    match detect_loader_on_disk(dir) {
+        Some((found, build)) => (found, loader_version.or(build)),
+        None => (loader, loader_version),
+    }
+}
+
+/// The loader and build a version folder name carries, e.g. `fabric-loader-0.16.9-1.21.1`.
+fn loader_from_version_name(name: &str) -> Option<(&'static str, Option<String>)> {
+    let build = |s: &str| s.split('-').next().filter(|b| !b.is_empty()).map(String::from);
+    if let Some(rest) = name.strip_prefix("fabric-loader-") {
+        return Some(("fabric", build(rest)));
+    }
+    if let Some(rest) = name.strip_prefix("quilt-loader-") {
+        return Some(("quilt", build(rest)));
+    }
+    // Checked before "forge-", which is a suffix of "neoforge-".
+    if let Some(pos) = name.find("neoforge-") {
+        return Some(("neoforge", build(&name[pos + "neoforge-".len()..])));
+    }
+    if let Some(pos) = name.find("forge-") {
+        return Some(("forge", build(&name[pos + "forge-".len()..])));
+    }
+    None
+}
+
+/// The loader a mod jar was written for, read from the metadata file each loader requires.
+/// Quilt and NeoForge are checked before the loaders whose metadata they also ship.
+fn jar_loader(jar: &std::path::Path) -> Option<&'static str> {
+    let file = fs::File::open(jar).ok()?;
+    let mut archive = zip::ZipArchive::new(file).ok()?;
+    let has = |archive: &mut zip::ZipArchive<fs::File>, name: &str| archive.by_name(name).is_ok();
+    if has(&mut archive, "quilt.mod.json") {
+        Some("quilt")
+    } else if has(&mut archive, "META-INF/neoforge.mods.toml") {
+        Some("neoforge")
+    } else if has(&mut archive, "META-INF/mods.toml") {
+        Some("forge")
+    } else if has(&mut archive, "fabric.mod.json") {
+        Some("fabric")
+    } else {
+        None
+    }
+}
+
 pub fn write_death_profile(inst: &Instance) -> Result<(), String> {
     let dir = PathBuf::from(&inst.game_dir);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -173,7 +256,11 @@ pub fn write_death_profile(inst: &Instance) -> Result<(), String> {
             if inst.loader == "vanilla" {
                 (inst.loader.clone(), inst.game_version.clone(), inst.game_version.clone())
             } else if inst.loader == "fabric" {
-                (inst.loader.clone(), format!("fabric-loader-0.19.5-{}", inst.game_version), format!("fabric · {}", inst.game_version))
+                let version_id = match inst.loader_version.as_deref() {
+                    Some(build) => format!("fabric-loader-{build}-{}", inst.game_version),
+                    None => inst.game_version.clone(),
+                };
+                (inst.loader.clone(), version_id, format!("fabric · {}", inst.game_version))
             } else {
                 (inst.loader.clone(), inst.game_version.clone(), format!("{} · {}", inst.loader, inst.game_version))
             }
@@ -286,6 +373,12 @@ pub fn load_instances() -> Vec<Instance> {
                         } else {
                             "-Xmx4G -XX:+UseG1GC".to_string()
                         };
+                        let profile_loader_version = v
+                            .get("loaderVersion")
+                            .and_then(|x| x.as_str())
+                            .filter(|s| !s.trim().is_empty())
+                            .map(String::from);
+                        let (loader, loader_version) = settle_loader(&path, loader, profile_loader_version);
                         let last_played = cached.as_ref().and_then(|c| c.last_played.clone());
                         let created_at = v.get("createdUtc")
                             .and_then(|c| c.as_str())
@@ -307,11 +400,7 @@ pub fn load_instances() -> Vec<Instance> {
                             java_args,
                             created_at,
                             last_played,
-                            loader_version: v
-                                .get("loaderVersion")
-                                .and_then(|x| x.as_str())
-                                .filter(|s| !s.trim().is_empty())
-                                .map(String::from),
+                            loader_version,
                         };
                         if is_rust {
                             let _ = write_death_profile(&inst);
@@ -328,6 +417,9 @@ pub fn load_instances() -> Vec<Instance> {
                     c.loader = "horizon-rust".to_string();
                     c.game_version = "26.3".to_string();
                 }
+                let (loader, loader_version) = settle_loader(&path, c.loader.clone(), c.loader_version.clone());
+                c.loader = loader;
+                c.loader_version = loader_version;
                 c
             } else {
                 let is_rust = detect_is_rust(&path, None, &folder_name);
@@ -339,7 +431,11 @@ pub fn load_instances() -> Vec<Instance> {
                 } else {
                     "26.3".to_string()
                 };
-                let loader = if is_rust { "horizon-rust".to_string() } else { "vanilla".to_string() };
+                let (loader, loader_version) = if is_rust {
+                    ("horizon-rust".to_string(), None)
+                } else {
+                    settle_loader(&path, "vanilla".to_string(), None)
+                };
                 Instance {
                     id: folder_name.clone(),
                     name: folder_name.clone(),
@@ -354,7 +450,7 @@ pub fn load_instances() -> Vec<Instance> {
                     java_args: "-Xmx4G -XX:+UseG1GC".to_string(),
                     created_at: chrono::Local::now().format("%Y-%m-%d").to_string(),
                     last_played: None,
-                    loader_version: None,
+                    loader_version,
                 }
             };
 
@@ -701,7 +797,17 @@ pub fn import_instance_directory(source_path_str: &str, edition_override: Option
         _ => detect_is_rust(&source, parsed_json_value.as_ref(), &instance_name),
     };
     let edition = if is_rust { EditionType::Rust } else { EditionType::Java };
-    let loader = if is_rust { "horizon-rust".to_string() } else { loader };
+    let profile_loader_version = parsed_json_value
+        .as_ref()
+        .and_then(|v| v.get("loaderVersion"))
+        .and_then(|x| x.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(String::from);
+    let (loader, loader_version) = if is_rust {
+        ("horizon-rust".to_string(), None)
+    } else {
+        settle_loader(&source, loader, profile_loader_version)
+    };
     let game_version = if is_rust { "26.3".to_string() } else { game_version };
 
     // Target directory in ~/.minecraft/death-client/instances/
@@ -754,7 +860,7 @@ pub fn import_instance_directory(source_path_str: &str, edition_override: Option
         java_args,
         created_at: chrono::Local::now().format("%Y-%m-%d").to_string(),
         last_played: None,
-        loader_version: None,
+        loader_version,
     };
 
     let _ = write_death_profile(&new_inst);
@@ -1001,4 +1107,57 @@ pub fn duplicate_instance(instance_id: &str) -> Result<Instance, String> {
     all.push(new_inst.clone());
     let _ = save_instances(&all);
     Ok(new_inst)
+}
+
+#[cfg(test)]
+mod loader_detection_tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn version_folder_names_give_loader_and_build() {
+        assert_eq!(loader_from_version_name("fabric-loader-0.16.9-1.21.1"), Some(("fabric", Some("0.16.9".into()))));
+        assert_eq!(loader_from_version_name("quilt-loader-0.26.0-1.20.4"), Some(("quilt", Some("0.26.0".into()))));
+        assert_eq!(loader_from_version_name("1.21.1-neoforge-21.1.1"), Some(("neoforge", Some("21.1.1".into()))));
+        assert_eq!(loader_from_version_name("1.20.1-forge-47.2.0"), Some(("forge", Some("47.2.0".into()))));
+        assert_eq!(loader_from_version_name("1.21.1"), None);
+    }
+
+    #[test]
+    fn jar_metadata_identifies_the_loader() {
+        let dir = std::env::temp_dir().join(format!("fugo-loader-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mods = dir.join("mods");
+        fs::create_dir_all(&mods).unwrap();
+
+        let write_jar = |name: &str, entries: &[&str]| {
+            let file = fs::File::create(mods.join(name)).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            for entry in entries {
+                zip.start_file(*entry, zip::write::SimpleFileOptions::default()).unwrap();
+                zip.write_all(b"{}").unwrap();
+            }
+            zip.finish().unwrap();
+        };
+        write_jar("a.jar", &["fabric.mod.json"]);
+        write_jar("b.jar", &["fabric.mod.json"]);
+        write_jar("c.jar", &["META-INF/mods.toml"]);
+        write_jar("q.jar", &["quilt.mod.json", "fabric.mod.json"]);
+
+        assert_eq!(detect_loader_on_disk(&dir), Some(("fabric".to_string(), None)));
+        assert_eq!(jar_loader(&mods.join("q.jar")), Some("quilt"));
+        assert_eq!(jar_loader(&mods.join("c.jar")), Some("forge"));
+
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(detect_loader_on_disk(&dir), None);
+    }
+
+    #[test]
+    fn settle_loader_keeps_explicit_loaders() {
+        let dir = std::env::temp_dir().join(format!("fugo-settle-test-{}", std::process::id()));
+        fs::create_dir_all(dir.join("versions/fabric-loader-0.16.9-1.21.1")).unwrap();
+        assert_eq!(settle_loader(&dir, "vanilla".into(), None), ("fabric".to_string(), Some("0.16.9".to_string())));
+        assert_eq!(settle_loader(&dir, "quilt".into(), None), ("quilt".to_string(), None));
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
