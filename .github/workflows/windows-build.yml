@@ -5,6 +5,9 @@ name: Windows build (artifacts only)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - offline-launch
 
 permissions:
   contents: read
