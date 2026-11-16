@@ -26,6 +26,9 @@ pub const CHANNEL: &str = "nightly";
 /// How often the background updater checks for a new Nightly.
 pub const CHECK_EVERY: Duration = Duration::from_secs(30 * 60);
 
+/// How long the launch waits for GitHub before it starts the Nightly already on this computer.
+const CHECK_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// A line-by-line log sink, shareable with blocking threads.
 pub type Log = Arc<dyn Fn(&str) + Send + Sync>;
 
@@ -131,6 +134,7 @@ pub async fn ensure_release(client: &reqwest::Client, log: &Log) -> Result<PathB
     let release: Release = client
         .get(format!("https://api.github.com/repos/{REPO}/releases/tags/{CHANNEL}"))
         .header("Accept", "application/vnd.github+json")
+        .timeout(CHECK_TIMEOUT)
         .send()
         .await
         .and_then(|r| r.error_for_status())
@@ -302,12 +306,35 @@ pub async fn ensure_resources(
     Ok(resources)
 }
 
-/// The release, prepared, ready for a launch.
+/// The release, prepared, ready for a launch. When GitHub can't be reached, the newest Nightly
+/// already on this computer starts instead, so a prepared Horizon still plays offline.
 pub async fn ready(client: &reqwest::Client, progress: &Progress, log: &Log) -> Result<(PathBuf, PathBuf), String> {
     let _install = install_lock().lock().await;
-    let release = ensure_release(client, log).await?;
+    let release = match ensure_release(client, log).await {
+        Ok(release) => release,
+        Err(reason) => match newest_prepared_in(&releases_dir()) {
+            Some(release) => {
+                log(&format!("{reason}. Starting the Horizon Nightly already on this computer."));
+                release
+            }
+            None => return Err(reason),
+        },
+    };
     let resources = ensure_resources(client, &release, progress, log).await?;
     Ok((release.join(binary_name()), resources))
+}
+
+/// The newest Nightly folder under `root` that has its game binary and prepared files.
+pub fn newest_prepared_in(root: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with("nightly-"))
+        .map(|e| e.path())
+        .filter(|path| path.join(binary_name()).is_file() && is_prepared(&resources_in(path)))
+        .filter_map(|path| Some((path.metadata().ok()?.modified().ok()?, path)))
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, path)| path)
 }
 
 /// The HTTP client the Rust Edition uses.
@@ -468,6 +495,65 @@ d4d3aba3e26fdb85a7b56c643f3cd2c3a4a198b0bd757e614f1efdf0654c75dc *horizon-server
             ("nightly-middle".to_string(), at(20)),
         ];
         assert_eq!(stale_folders(folders, 2), vec!["nightly-old".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod offline_tests {
+    use super::*;
+
+    /// A fresh folder under the system temp dir, unique to this test run.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fugo-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A Nightly folder with its game binary and, when `prepared`, its prepared resources.
+    fn nightly(root: &Path, name: &str, prepared: bool) {
+        let release = root.join(name);
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(release.join(binary_name()), b"").unwrap();
+        if prepared {
+            let resources = resources_in(&release);
+            std::fs::create_dir_all(&resources).unwrap();
+            std::fs::write(resources.join("horizon-resources.json"), b"{}").unwrap();
+        }
+    }
+
+    #[test]
+    fn a_nightly_that_is_not_prepared_is_not_used_offline() {
+        let root = scratch("offline-unprepared");
+        nightly(&root, "nightly-aaaaaaaaaaaa", false);
+        assert_eq!(newest_prepared_in(&root), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_prepared_nightly_is_used_offline_and_the_unprepared_one_is_skipped() {
+        let root = scratch("offline-pick");
+        nightly(&root, "nightly-prepared000", true);
+        std::thread::sleep(Duration::from_millis(20));
+        nightly(&root, "nightly-newer00000", false);
+        assert_eq!(newest_prepared_in(&root), Some(root.join("nightly-prepared000")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Starts the Rust Edition with the network switched off: GitHub can't be reached, so the
+    /// Nightly already in the launcher's folder is used. Run it with networking disabled:
+    /// `unshare -rn cargo test -- --ignored launches_offline`.
+    #[tokio::test]
+    #[ignore]
+    async fn launches_offline_from_the_installed_build() {
+        let client = http();
+        let log: Log = Arc::new(|m: &str| println!("log: {m}"));
+        let progress = |stage: &str, done: usize, total: usize| println!("progress: {stage} {done}/{total}");
+        let (binary, resources) = ready(&client, &progress, &log).await.unwrap();
+        println!("binary: {}", binary.display());
+        println!("resources: {}", resources.display());
+        assert!(binary.is_file());
+        assert!(is_prepared(&resources));
     }
 }
 
