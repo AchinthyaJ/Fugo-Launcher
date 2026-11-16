@@ -310,6 +310,20 @@ pub async fn ensure_resources(
 /// already on this computer starts instead, so a prepared Horizon still plays offline.
 pub async fn ready(client: &reqwest::Client, progress: &Progress, log: &Log) -> Result<(PathBuf, PathBuf), String> {
     let _install = install_lock().lock().await;
+    // A fresh install: the Nightly and its prepared files that came with Fugo are copied in and
+    // used as they are, so nothing is downloaded or prepared on this computer.
+    if newest_prepared_in(&releases_dir()).is_none()
+        && let Some(bundled) = bundled_release()
+    {
+        let name = bundled.file_name().unwrap_or_default().to_os_string();
+        let dest = releases_dir().join(name);
+        log("Setting up Horizon from the files that came with Fugo...");
+        let (from, to) = (bundled, dest.clone());
+        tokio::task::spawn_blocking(move || install_bundled(&from, &to))
+            .await
+            .map_err(err)??;
+        return Ok((dest.join(binary_name()), resources_in(&dest)));
+    }
     let release = match ensure_release(client, log).await {
         Ok(release) => release,
         Err(reason) => match newest_prepared_in(&releases_dir()) {
@@ -322,6 +336,45 @@ pub async fn ready(client: &reqwest::Client, progress: &Progress, log: &Log) -> 
     };
     let resources = ensure_resources(client, &release, progress, log).await?;
     Ok((release.join(binary_name()), resources))
+}
+
+/// The Horizon folder that ships inside the installer (`<resources>/horizon`), set at startup.
+static BUNDLED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_bundled_dir(dir: PathBuf) {
+    let _ = BUNDLED.set(dir);
+}
+
+/// The Nightly that ships with Fugo, when this build has one.
+fn bundled_release() -> Option<PathBuf> {
+    newest_prepared_in(BUNDLED.get()?)
+}
+
+/// Copies every file under `from` into `to`, creating folders as needed.
+fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
+    for entry in walkdir::WalkDir::new(from) {
+        let entry = entry.map_err(err)?;
+        let out = to.join(entry.path().strip_prefix(from).map_err(err)?);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&out).map_err(err)?;
+        } else {
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent).map_err(err)?;
+            }
+            std::fs::copy(entry.path(), &out).map_err(err)?;
+        }
+    }
+    Ok(())
+}
+
+/// Copies a bundled Nightly into the launcher's folders. It's built under a partial name first,
+/// so an interrupted copy is never mistaken for a finished one.
+fn install_bundled(from: &Path, to: &Path) -> Result<(), String> {
+    let partial = to.with_extension("partial");
+    let _ = std::fs::remove_dir_all(&partial);
+    copy_tree(from, &partial)?;
+    let _ = std::fs::remove_dir_all(to);
+    std::fs::rename(&partial, to).map_err(err)
 }
 
 /// The newest Nightly folder under `root` that has its game binary and prepared files.
@@ -537,6 +590,22 @@ mod offline_tests {
         std::thread::sleep(Duration::from_millis(20));
         nightly(&root, "nightly-newer00000", false);
         assert_eq!(newest_prepared_in(&root), Some(root.join("nightly-prepared000")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_bundled_nightly_is_copied_whole_into_the_launcher_folders() {
+        let root = scratch("bundled-copy");
+        let from = root.join("from/nightly-bundled0000");
+        nightly(&root.join("from"), "nightly-bundled0000", true);
+        std::fs::create_dir_all(from.join("deep")).unwrap();
+        std::fs::write(from.join("deep/file.txt"), b"x").unwrap();
+        let to = root.join("data/nightly-bundled0000");
+        install_bundled(&from, &to).unwrap();
+        assert!(to.join(binary_name()).is_file());
+        assert!(is_prepared(&resources_in(&to)));
+        assert!(to.join("deep/file.txt").is_file());
+        assert!(!root.join("data/nightly-bundled0000.partial").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 

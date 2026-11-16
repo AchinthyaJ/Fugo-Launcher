@@ -258,6 +258,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            use tauri::Manager;
+            if let Ok(resources) = app.path().resource_dir() {
+                mc::horizon::set_bundled_dir(resources.join("horizon"));
+            }
             mc::horizon::spawn_updater(app.handle().clone());
             Ok(())
         })
