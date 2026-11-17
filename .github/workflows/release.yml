@@ -137,4 +137,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: gh release upload "$GITHUB_REF_NAME" arch/*.pkg.tar.zst --clobber
+        # This job has no checkout (no .git folder), so gh cannot read the repo from git.
+        # Pass the repository explicitly.
+        run: gh release upload "$GITHUB_REF_NAME" arch/*.pkg.tar.zst --clobber --repo "$GITHUB_REPOSITORY"

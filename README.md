@@ -380,6 +380,7 @@ The app's version is kept in three places: `package.json`, `src-tauri/Cargo.toml
 - The front end has no automated tests.
 - The window controls and the frameless title bar were tested in a browser, not in every desktop
   environment.
+- The launcher refuses to run instances without internet
 
 ---
 
