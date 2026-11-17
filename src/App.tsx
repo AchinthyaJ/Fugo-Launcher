@@ -92,6 +92,16 @@ function getCoverSrc(banner: string | null | undefined): string {
   return `/assets/${banner}`;
 }
 
+/// The instance with the latest `last_played` ("YYYY-MM-DD HH:MM", so text order is time order).
+/// Instances never played have no time and are passed over.
+function mostRecentlyPlayed(list: Instance[]): Instance | undefined {
+  return list.reduce<Instance | undefined>((best, inst) => {
+    if (!inst.last_played) return best;
+    if (!best || inst.last_played > (best.last_played ?? "")) return inst;
+    return best;
+  }, undefined);
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<"home" | "instances" | "mods" | "customize" | "settings" | "servers">("home");
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
@@ -223,7 +233,11 @@ export default function App() {
   useEffect(() => {
     if (isTauri()) {
       invoke<Instance[]>("get_instances").then((res) => {
-        if (res && res.length > 0) setInstances(res);
+        if (res && res.length > 0) {
+          setInstances(res);
+          // Start on the instance played most recently; with none played yet, the first one.
+          setSelectedInstanceId(mostRecentlyPlayed(res)?.id ?? res[0].id);
+        }
       }).catch(console.error);
 
       invoke<Account[]>("get_accounts").then(async (res) => {

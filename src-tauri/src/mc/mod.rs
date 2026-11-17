@@ -60,9 +60,12 @@ pub fn expand_home(path: &str) -> PathBuf {
     }
 }
 
+/// Without a connection the launch must fall back to what is installed, so a server that never
+/// answers is given up on after this long. Downloads themselves are not cut short.
 pub fn http() -> reqwest::Client {
     reqwest::Client::builder()
         .user_agent("fugo-launcher")
+        .connect_timeout(std::time::Duration::from_secs(15))
         .build()
         .expect("HTTP client")
 }

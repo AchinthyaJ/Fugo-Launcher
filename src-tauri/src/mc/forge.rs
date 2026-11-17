@@ -88,7 +88,48 @@ fn installer_url(loader: &str, mc_version: &str, version: &str) -> String {
 }
 
 /// Installs a Forge or NeoForge build for `mc_version` and returns its version id.
+/// The Forge or NeoForge version to launch. Without a connection, a build already installed for
+/// this Minecraft version is used, so an installed game still starts offline.
 pub async fn ensure_installed(
+    client: &reqwest::Client,
+    loader: &str,
+    mc_version: &str,
+    requested: Option<&str>,
+    progress: &install::Progress,
+) -> Result<String, String> {
+    match install_build(client, loader, mc_version, requested, progress).await {
+        Ok(id) => Ok(id),
+        Err(network_error) => installed_build(loader, mc_version, requested).ok_or(network_error),
+    }
+}
+
+/// A build whose installer was kept and whose install finished, for offline use. With no build
+/// asked for, the newest such build is used, as the online path would pick the newest one.
+fn installed_build(loader: &str, mc_version: &str, requested: Option<&str>) -> Option<String> {
+    let installers = mc_root().join(".horizon-installers");
+    let prefix = format!("{loader}-{mc_version}-");
+    let suffix = "-installer.jar";
+    let mut kept: Vec<PathBuf> = std::fs::read_dir(installers)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|path| {
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else { return false };
+            name.starts_with(&prefix)
+                && name.ends_with(suffix)
+                && requested.is_none_or(|build| name == format!("{prefix}{build}{suffix}"))
+        })
+        .collect();
+    kept.sort();
+    kept.reverse();
+    kept.into_iter().find_map(|installer| {
+        let (version_doc, _) = read_installer(&installer).ok()?;
+        let id = version_doc.get("id").and_then(Value::as_str)?.to_string();
+        versions_dir().join(&id).join(DONE_MARKER).is_file().then_some(id)
+    })
+}
+
+async fn install_build(
     client: &reqwest::Client,
     loader: &str,
     mc_version: &str,

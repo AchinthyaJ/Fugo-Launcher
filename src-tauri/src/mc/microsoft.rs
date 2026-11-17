@@ -89,7 +89,7 @@ pub async fn ensure_fresh(client: &reqwest::Client, account: &Account) -> Result
         .as_deref()
         .filter(|token| !token.is_empty())
         .ok_or("This Microsoft account must sign in again. Use Sign in with Microsoft.")?;
-    let (status, tokens) = form_post(
+    let renewal = form_post(
         client,
         TOKEN_URL,
         form(&[
@@ -99,7 +99,16 @@ pub async fn ensure_fresh(client: &reqwest::Client, account: &Account) -> Result
             ("scope", SCOPE),
         ]),
     )
-    .await?;
+    .await;
+    let (status, tokens) = match renewal {
+        Ok(response) => response,
+        // No internet: the game still starts with the sign-in already saved. The token is only
+        // needed for online play, and the next launch with a connection renews it.
+        Err(offline) => {
+            eprintln!("Microsoft sign-in not renewed, starting with the saved sign-in: {offline}");
+            return Ok(account.clone());
+        }
+    };
     if status != 200 {
         return Err(format!("{} Sign in with Microsoft again.", error_text(&tokens)));
     }
